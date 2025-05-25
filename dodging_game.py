@@ -1,6 +1,7 @@
 import pygame
 import random
 import sys
+import math
 
 pygame.init()
 WIDTH, HEIGHT = 800, 600
@@ -10,6 +11,7 @@ FPS = 60
 INITIAL_BULL_SIZE = 40
 MAX_BULL_SIZE = 100
 BULL_SIZE_GROWTH = 4
+
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("🐂 Bull Rush")
 clock = pygame.time.Clock()
@@ -21,28 +23,31 @@ player = pygame.Rect(WIDTH // 2, HEIGHT // 2, PLAYER_SIZE, PLAYER_SIZE)
 font = pygame.font.SysFont(None, 36)
 big_font = pygame.font.SysFont(None, 72)
 
+def normal_spawn_pos(max_val, size):
+    # Normal distribution centered around the middle with std dev
+    center = max_val / 2
+    std_dev = max_val / 6
+    val = random.gauss(center, std_dev)
+    # Clamp inside screen boundaries minus size of bull
+    return max(0, min(max_val - size, int(val)))
+
 class Bull:
-    def __init__(self, direction, size):
+    def __init__(self, direction, size, min_speed, max_speed):
         self.direction = direction
         self.size = size
-        speed = random.randint(200, 300)
-
-        def clamp(value, min_val, max_val):
-            return max(min_val, min(value, max_val))
+        speed = random.randint(min_speed, max_speed)
 
         if direction == "horizontal":
-            self.rect = pygame.Rect(
-                0 if random.choice([True, False]) else WIDTH,
-                int(clamp(random.gauss(HEIGHT // 2, HEIGHT // 6), 0, HEIGHT - size)),
-                size, size)
-            self.speed_x = speed if self.rect.x == 0 else -speed
+            x = 0 if random.choice([True, False]) else WIDTH
+            y = normal_spawn_pos(HEIGHT, size)
+            self.rect = pygame.Rect(x, y, size, size)
+            self.speed_x = speed if x == 0 else -speed
             self.speed_y = 0
         else:
-            self.rect = pygame.Rect(
-                int(clamp(random.gauss(WIDTH // 2, WIDTH // 6), 0, WIDTH - size)),
-                0 if random.choice([True, False]) else HEIGHT,
-                size, size)
-            self.speed_y = speed if self.rect.y == 0 else -speed
+            x = normal_spawn_pos(WIDTH, size)
+            y = 0 if random.choice([True, False]) else HEIGHT
+            self.rect = pygame.Rect(x, y, size, size)
+            self.speed_y = speed if y == 0 else -speed
             self.speed_x = 0
 
     def move(self, delta_time):
@@ -59,9 +64,23 @@ bulls = []
 spawn_timer = 0
 level = 1
 score = 0
-spawn_interval = 800
+spawn_interval = 1200  # faster initial spawn rate
 level_message_timer = 0
 game_over = False
+paused = False
+
+def reset_game():
+    global bulls, spawn_timer, level, score, spawn_interval, level_message_timer, game_over, paused
+    bulls = []
+    spawn_timer = 0
+    level = 1
+    score = 0
+    spawn_interval = 800
+    level_message_timer = 0
+    game_over = False
+    paused = False
+    player.x = WIDTH // 2
+    player.y = HEIGHT // 2
 
 while True:
     delta_time = clock.tick(FPS) / 1000
@@ -71,20 +90,24 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        if game_over and event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_q:
-                pygame.quit()
-                sys.exit()
-            elif event.key == pygame.K_r:
-                bulls.clear()
-                score = 0
-                level = 1
-                spawn_interval = 800
-                player.x, player.y = WIDTH // 2, HEIGHT // 2
-                game_over = False
 
+        if event.type == pygame.KEYDOWN:
+            if game_over:
+                if event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+                if event.key == pygame.K_r:
+                    reset_game()
+            else:
+                if event.key == pygame.K_p:
+                    paused = not paused
+                if event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+                if paused and event.key == pygame.K_r:
+                    reset_game()
 
-    if not game_over:
+    if not game_over and not paused:
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             player.y -= PLAYER_SPEED * delta_time
@@ -99,8 +122,12 @@ while True:
         spawn_timer += delta_time * 1000
         if spawn_timer > spawn_interval:
             direction = random.choice(["horizontal", "vertical"])
-            size = min(INITIAL_BULL_SIZE + (level - 1) * BULL_SIZE_GROWTH, MAX_BULL_SIZE)
-            bulls.append(Bull(direction, size))
+            # Calculate bull size capped at max
+            bull_size = min(INITIAL_BULL_SIZE + BULL_SIZE_GROWTH * (level - 1), MAX_BULL_SIZE)
+            # Calculate speeds increasing with level
+            min_speed = 150 + (level - 1) * 20
+            max_speed = 250 + (level - 1) * 30
+            bulls.append(Bull(direction, bull_size, min_speed, max_speed))
             spawn_timer = 0
 
         for bull in bulls[:]:
@@ -119,6 +146,7 @@ while True:
             spawn_interval = max(400, spawn_interval - 100)
             level_message_timer = 2.0
 
+    # Draw HUD info
     score_text = font.render(f"Score: {score // FPS}", True, WHITE)
     screen.blit(score_text, (10, 10))
 
@@ -126,6 +154,36 @@ while True:
         level_message = font.render(f"Level Up! Level {level}", True, WHITE)
         screen.blit(level_message, (WIDTH - level_message.get_width() - 10, 10))
         level_message_timer -= delta_time
+
+    # Press P to pause and Press Q to quit messages always visible
+    pause_msg = font.render("Press P to Pause", True, WHITE)
+    quit_msg = font.render("Press Q to Quit", True, WHITE)
+    screen.blit(pause_msg, (WIDTH - pause_msg.get_width() - 10, HEIGHT - pause_msg.get_height() - 10))
+    screen.blit(quit_msg, (10, HEIGHT - quit_msg.get_height() - 10))
+
+    if paused:
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0, 0))
+
+        paused_text = big_font.render("PAUSED", True, WHITE)
+        resume_msg = font.render("Press P again to Resume", True, WHITE)
+        quit_msg_paused = font.render("Press Q to Quit", True, WHITE)
+        restart_msg = font.render("Press R to Restart", True, WHITE)
+
+        screen.blit(paused_text, (
+            WIDTH // 2 - paused_text.get_width() // 2,
+            HEIGHT // 2 - 100))
+        screen.blit(resume_msg, (
+            WIDTH // 2 - resume_msg.get_width() // 2,
+            HEIGHT // 2 - 20))
+        screen.blit(quit_msg_paused, (
+            WIDTH // 2 - quit_msg_paused.get_width() // 2,
+            HEIGHT // 2 + 20))
+        screen.blit(restart_msg, (
+            WIDTH // 2 - restart_msg.get_width() // 2,
+            HEIGHT // 2 + 60))
 
     if game_over:
         overlay = pygame.Surface((WIDTH, HEIGHT))
