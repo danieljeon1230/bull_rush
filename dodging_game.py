@@ -24,11 +24,9 @@ font = pygame.font.SysFont(None, 36)
 big_font = pygame.font.SysFont(None, 72)
 
 def normal_spawn_pos(max_val, size):
-    # Normal distribution centered around the middle with std dev
     center = max_val / 2
     std_dev = max_val / 6
     val = random.gauss(center, std_dev)
-    # Clamp inside screen boundaries minus size of bull
     return max(0, min(max_val - size, int(val)))
 
 class Bull:
@@ -64,7 +62,7 @@ bulls = []
 spawn_timer = 0
 level = 1
 score = 0
-spawn_interval = 1200  # faster initial spawn rate
+spawn_interval = 800
 level_message_timer = 0
 game_over = False
 paused = False
@@ -122,9 +120,7 @@ while True:
         spawn_timer += delta_time * 1000
         if spawn_timer > spawn_interval:
             direction = random.choice(["horizontal", "vertical"])
-            # Calculate bull size capped at max
             bull_size = min(INITIAL_BULL_SIZE + BULL_SIZE_GROWTH * (level - 1), MAX_BULL_SIZE)
-            # Calculate speeds increasing with level
             min_speed = 150 + (level - 1) * 20
             max_speed = 250 + (level - 1) * 30
             bulls.append(Bull(direction, bull_size, min_speed, max_speed))
@@ -146,7 +142,6 @@ while True:
             spawn_interval = max(400, spawn_interval - 100)
             level_message_timer = 2.0
 
-    # Draw HUD info
     score_text = font.render(f"Score: {score // FPS}", True, WHITE)
     screen.blit(score_text, (10, 10))
 
@@ -155,7 +150,6 @@ while True:
         screen.blit(level_message, (WIDTH - level_message.get_width() - 10, 10))
         level_message_timer -= delta_time
 
-    # Press P to pause and Press Q to quit messages always visible
     pause_msg = font.render("Press P to Pause", True, WHITE)
     quit_msg = font.render("Press Q to Quit", True, WHITE)
     screen.blit(pause_msg, (WIDTH - pause_msg.get_width() - 10, HEIGHT - pause_msg.get_height() - 10))
