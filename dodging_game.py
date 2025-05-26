@@ -18,7 +18,8 @@ clock = pygame.time.Clock()
 
 WHITE, RED, BLUE, BLACK = (255, 255, 255), (200, 0, 0), (0, 100, 255), (0, 0, 0)
 
-player = pygame.Rect(WIDTH // 2, HEIGHT // 2, PLAYER_SIZE, PLAYER_SIZE)
+confined_rect = pygame.Rect(WIDTH // 2 - 200, HEIGHT // 2 - 150, 400, 300)
+player = pygame.Rect(confined_rect.centerx, confined_rect.centery, PLAYER_SIZE, PLAYER_SIZE)
 
 font = pygame.font.SysFont(None, 36)
 big_font = pygame.font.SysFont(None, 72)
@@ -36,16 +37,16 @@ class Bull:
         speed = random.randint(min_speed, max_speed)
 
         if direction == "horizontal":
-            x = 0 if random.choice([True, False]) else WIDTH
             y = normal_spawn_pos(HEIGHT, size)
+            x = 0 - size if random.choice([True, False]) else WIDTH
             self.rect = pygame.Rect(x, y, size, size)
-            self.speed_x = speed if x == 0 else -speed
+            self.speed_x = speed if x < WIDTH // 2 else -speed
             self.speed_y = 0
         else:
             x = normal_spawn_pos(WIDTH, size)
-            y = 0 if random.choice([True, False]) else HEIGHT
+            y = 0 - size if random.choice([True, False]) else HEIGHT
             self.rect = pygame.Rect(x, y, size, size)
-            self.speed_y = speed if y == 0 else -speed
+            self.speed_y = speed if y < HEIGHT // 2 else -speed
             self.speed_x = 0
 
     def move(self, delta_time):
@@ -57,6 +58,10 @@ class Bull:
             self.rect.right < 0 or self.rect.left > WIDTH or
             self.rect.bottom < 0 or self.rect.top > HEIGHT
         )
+
+    def will_enter_confined_area(self):
+        future_rect = self.rect.move(self.speed_x, self.speed_y)
+        return future_rect.colliderect(confined_rect)
 
 bulls = []
 spawn_timer = 0
@@ -77,12 +82,13 @@ def reset_game():
     level_message_timer = 0
     game_over = False
     paused = False
-    player.x = WIDTH // 2
-    player.y = HEIGHT // 2
+    player.x = confined_rect.centerx
+    player.y = confined_rect.centery
 
 while True:
     delta_time = clock.tick(FPS) / 1000
     screen.fill(BLACK)
+    pygame.draw.rect(screen, WHITE, confined_rect, 2)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -115,7 +121,7 @@ while True:
             player.x -= PLAYER_SPEED * delta_time
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             player.x += PLAYER_SPEED * delta_time
-        player.clamp_ip(screen.get_rect())
+        player.clamp_ip(confined_rect)
 
         spawn_timer += delta_time * 1000
         if spawn_timer > spawn_interval:
@@ -123,8 +129,10 @@ while True:
             bull_size = min(INITIAL_BULL_SIZE + BULL_SIZE_GROWTH * (level - 1), MAX_BULL_SIZE)
             min_speed = 150 + (level - 1) * 20
             max_speed = 250 + (level - 1) * 30
-            bulls.append(Bull(direction, bull_size, min_speed, max_speed))
-            spawn_timer = 0
+            temp_bull = Bull(direction, bull_size, min_speed, max_speed)
+            if temp_bull.will_enter_confined_area():
+                bulls.append(temp_bull)
+                spawn_timer = 0
 
         for bull in bulls[:]:
             bull.move(delta_time)
