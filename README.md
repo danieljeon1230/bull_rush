@@ -1,4 +1,4 @@
-# 🐂 Bull Rush
+# Bull Rush
 
 Bull Rush is a simple Pygame dodging game where you control a blue square and try to avoid incoming red bulls. The game gets progressively harder as you level up, with bulls getting larger and faster.
 
